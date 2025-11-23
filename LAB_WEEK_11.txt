@@ -1,0 +1,74 @@
+Question 1:
+When a user takes a picture, that picture is stored in a path based on the given URI. In which part of the code handles this? (Copy that part of the code as the answer)
+
+Answer
+The picture storage is handled in the ProviderFileManager.kt file, specifically in these parts:
+
+1. URI Generation:
+fun generatePhotoUri(time: Long): FileInfo {
+    val name = "img_$time.jpg"
+    val file = File(
+        context.getExternalFilesDir(fileHelper.getPicturesFolder()),
+        name
+    )
+    return FileInfo(
+        fileHelper.getUriFromFile(file),
+        file,
+        name,
+        fileHelper.getPicturesFolder(),
+        "image/jpeg"
+    )
+}
+
+2. Actual Storage to MediaStore:
+private fun insertToStore(
+    fileInfo: FileInfo,
+    contentUri: Uri,
+    contentValues: ContentValues
+) {
+    executor.execute {
+        val insertedUri = contentResolver.insert(contentUri, contentValues)
+        insertedUri?.let {
+            val inputStream = contentResolver.openInputStream(fileInfo.uri)
+            val outputStream = contentResolver.openOutputStream(insertedUri)
+            IOUtils.copy(inputStream, outputStream)
+        }
+    }
+}
+
+Question 2:
+In your FileInfo.kt, there are 5 attributes. On the first attribute, what does the URI refer to? And on the fourth attribute, what does relativePath refer to?
+
+Answer
+
+First attribute (uri: Uri):
+The URI refers to a temporary, content-provider-generated URI that points to the actual file location. This URI is created by FileProvider and allows the Camera app to write the captured photo/video to our app's private storage location. It acts as a secure access token that grants temporary permission to external apps (like the Camera) to access our app's files.
+
+Fourth attribute (relativePath: String):
+The relativePath refers to the folder path within the external storage where the file will be stored in MediaStore. For photos, it's "Pictures" (Environment.DIRECTORY_PICTURES), and for videos, it's "Movies" (Environment.DIRECTORY_MOVIES). This determines where the file will appear in the user's Gallery app after being copied to MediaStore.
+
+Question 3 :
+Explain the chronological order from when a user takes a picture until the file is stored in the MediaStore.
+
+Answer
+
+Chronological order of photo capture and storage:
+
+1. User clicks "Photo" button in MainActivity
+2. checkStoragePermission() is called to verify storage permissions (for API 28 and below)
+3. openImageCapture() is called
+4. ProviderFileManager.generatePhotoUri() creates a FileInfo object:
+   - Generates a unique filename with timestamp (img_timestamp.jpg)
+   - Creates a File object pointing to app's external files directory
+   - Uses FileProvider to generate a secure URI for that file
+5. takePictureLauncher.launch(photoInfo?.uri) opens the Camera app
+6. Camera app writes the photo directly to the URI location (app's private storage)
+7. When camera finishes, the result callback is triggered
+8. providerFileManager.insertImageToStore(photoInfo) is called
+9. Inside insertToStore():
+   - contentResolver.insert() creates a new entry in MediaStore
+   - openInputStream() reads from the temporary file
+   - openOutputStream() writes to MediaStore's public location
+   - IOUtils.copy() copies the actual image data
+10. The photo is now available in MediaStore and visible in Gallery apps
+11. The temporary file in app's private storage can remain or be deleted
